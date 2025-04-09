@@ -7,6 +7,7 @@ import { saveAs } from "file-saver";
 import downloadIcon from "../../assets/downloadIcon.svg";
 import { DataObj } from "../../types";
 import { addCommasToNumber } from "../../utils/numberManipulations";
+import { isPhoneNumberValid } from "../../utils/phoneValidation";
 
 interface Props {
     dataObj: DataObj
@@ -21,54 +22,78 @@ const ExportButton: React.FC<Props> = ({dataObj}) => {
         step1Total,
         planningStep2,
         step2Total,
+        step3Total,
         totalSum,
       } = dataObj;
+
+    // Get the active section from the product-list component
+    const activeSection = dataObj.activeSection || "";
 
     const loadFile = (url: string, callback: (error: Error | null, content: string) => void) => {
         PizZipUtils.getBinaryContent(url, callback);
     };
 
     const exportToDocx = () => {
-        loadFile("public/planningTemplate.docx", function (error, content) {
-            if (error) {
-                throw error;
-            }
-            const zip = new PizZip(content);
-            const doc = new Docxtemplater(zip, {
-                paragraphLoop: true,
-                linebreaks: true,
-            });
-
-            const formattedPlanningStep1 = planningStep1?.map(product => {
-                // Adjust the properties to match your data structure
-                return `${product.name} - ${product.description}`;
-            }).join("\n"); // Join products with a newline for better formatting
-    
-            const formattedPlanningStep2 = planningStep2?.map(product => {
-                // Adjust the properties to match your data structure
-                return `${product.name} - ${product.description}`;
-            }).join("\n"); // Join products with a newline for better formatting
+        return new Promise<Blob>((resolve, reject) => {
+            const docxUrl = 'planningTemplate.docx';
             
-            doc.render({
-                customerName: customerName,
-                customerPhone: customerPhone,
-                currentDate: currentDate,
-                planningStep1: formattedPlanningStep1,
-                step1Total: addCommasToNumber(step1Total ?? 0),
-                planningStep2: formattedPlanningStep2,
-                step2Total: addCommasToNumber(step2Total ?? 0),
-                totalSum: addCommasToNumber(totalSum ?? 0),
+            loadFile(docxUrl, function (error, content) {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                const zip = new PizZip(content);
+                const doc = new Docxtemplater(zip, {
+                    paragraphLoop: true,
+                    linebreaks: true,
+                });
+
+                const formattedPlanningStep1 = planningStep1?.map(product => {
+                    return `${product.name} - ${product.description}`;
+                }).join("\n");
+        
+                const formattedPlanningStep2 = planningStep2?.map(product => {
+                    return `${product.name} - ${product.description}`;
+                }).join("\n");
+                
+                doc.render({
+                    customerName: customerName,
+                    customerPhone: customerPhone,
+                    currentDate: currentDate,
+                    planningStep1: formattedPlanningStep1,
+                    step1Total: addCommasToNumber(step1Total ?? 0),
+                    planningStep2: formattedPlanningStep2,
+                    step2Total: addCommasToNumber(step2Total ?? 0),
+                    planningStep3: activeSection,
+                    step3Total: addCommasToNumber(step3Total ?? 0),
+                    totalSum: addCommasToNumber(totalSum ?? 0)
+                });
+                const out = doc.getZip().generate({
+                    type: "blob",
+                    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                });
+                resolve(out);
             });
-            const out = doc.getZip().generate({
-                type: "blob",
-                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            }); // Output the document using Data-URI
-            saveAs(out, "output.docx");
         });
+    };
+    
+    const exportButtonOnClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        if (!isPhoneNumberValid(customerPhone)) {
+            e.preventDefault();
+            alert("מספר הטלפון שהוזן אינו תקין");
+            return;
+        }
+
+        try {
+            const docxFile = await exportToDocx();
+            saveAs(docxFile, `תכנון פיננסי ${customerName}.docx`);
+        } catch (error) {
+            console.error("Error generating or sending DOCX file:", error);
+        }
     };
 
     return (
-        <button className="export-button" onClick={exportToDocx}>
+        <button className="export-button" onClick={exportButtonOnClick}>
             <img src={downloadIcon} alt="download" />
         </button>
     );

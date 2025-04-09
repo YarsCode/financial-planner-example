@@ -19,5 +19,8 @@ export type DataObj = {
     step1Total?: number;
     planningStep2?: ProductType[];
     step2Total?: number;
+    planningStep3?: ProductType[];
+    step3Total?: number;
     totalSum?: number;
+    activeSection?: string;
 }

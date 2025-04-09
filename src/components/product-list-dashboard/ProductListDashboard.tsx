@@ -37,10 +37,11 @@ function ProductListDashboard() {
     const [chosenProductsContainer] = useState<ContainerType[]>(defaultChosenProductsContainer);
     const [hasClickedResetBtn, setHasClickedResetBtn] = useState(false);
     const [customerName, setCustomerName] = useState("שם הלקוח");
-    const [customerPhone, setCustomerPhone] = useState(Date.now().toString());
+    const [customerPhone, setCustomerPhone] = useState("ID-" + Date.now().toString());
     const [products, setProducts] = useState<ProductType[]>([]);
     const [step1Total, setStep1Total] = useState(0);
     const [step2Total, setStep2Total] = useState(0);
+    const [step3Total, setStep3Total] = useState(0);
     const [totalSum, setTotalSum] = useState(step1Total + step2Total);
     const [dataObj, setDataObj] = useState<DataObj>({
         customerName: '',
@@ -68,6 +69,8 @@ function ProductListDashboard() {
 
     const [activeProduct, setActiveProduct] = useState<ProductType | null>(null);
 
+    const [activeSection, setActiveSection] = useState("");
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
@@ -93,6 +96,8 @@ function ProductListDashboard() {
     }, [hasClickedResetBtn]);
 
     useEffect(() => {
+        // Only include step1 and step2 in the total sum (one-time fees)
+        // step3 (monthly fees) is deliberately excluded from the total
         setTotalSum(step1Total + step2Total);
     }, [step1Total, step2Total]);
 
@@ -101,9 +106,8 @@ function ProductListDashboard() {
     }, [customerName]);
 
     useMemo(() => {
-        setDataObj(setDashboardData(customerName, customerPhone, products, step1Total, step2Total, totalSum));
-        
-    }, [customerName, customerPhone, products, step1Total, step2Total, totalSum]);
+        setDataObj(setDashboardData(customerName, customerPhone, products, step1Total, step2Total, step3Total, totalSum, activeSection));
+    }, [customerName, customerPhone, products, step1Total, step2Total, step3Total, totalSum, activeSection]);
 
     //! console.log('products', products); // Check why this renders twice
 
@@ -120,8 +124,13 @@ function ProductListDashboard() {
     const handleCustomerPhoneChange = (e: ChangeEvent<HTMLInputElement>): void => {
         const value = e.target.value;
         const regex = /^\+?[0-9]*$/;
+        const initValue = "ID-" + Date.now().toString();
+        
+        if (!value.length) { //TODO: set timestamp if value is empty
+            setCustomerPhone(initValue);
+        }
 
-        if (regex.test(value)) {
+        if (value && regex.test(value)) {
             setCustomerPhone(value);
         }
     };
@@ -166,6 +175,8 @@ function ProductListDashboard() {
                 products={products.filter((product) => product.container === container.id)}
                 setStep1Total={setStep1Total}
                 setStep2Total={setStep2Total}
+                setStep3Total={setStep3Total}
+                setActiveSection={setActiveSection}
                 className={`product-list-container${
                     container.id !== "allProductsContainer" ? " chosen-products-container" : ""
                 }`}
@@ -231,6 +242,11 @@ function ProductListDashboard() {
                 const overIndex = products.findIndex((product) => product.id === overId);
 
                 if (products[activeIndex].container != products[overIndex].container) {
+                    // Prevent dropping into step3 container
+                    if (products[overIndex].container === "chosenProductsContainer_step3") {
+                        return [...products];
+                    }
+                    
                     products[activeIndex].container = products[overIndex].container;
                     return arrayMove(products, activeIndex, overIndex - 1);
                 }
@@ -245,12 +261,14 @@ function ProductListDashboard() {
             setProducts((products) => {
                 const activeIndex = products.findIndex((product) => product.id === activeId);
 
-                // console.log("overId:", overId);
-                // console.log("products[activeIndex].container:", products[activeIndex].container);
+                // Prevent dropping into step3 container
+                if (overId === "chosenProductsContainer_step3") {
+                    return [...products];
+                }
+                
                 if (typeof overId === "string") {
                     products[activeIndex].container = overId;
                 }
-                // console.log("DROPPING TASK OVER COLUMN", { activeIndex });
                 return arrayMove(products, activeIndex, activeIndex);
             });
         }
@@ -278,8 +296,8 @@ function ProductListDashboard() {
                                 placeholder="שם הלקוח"
                                 style={{ width: inputWidth }}
                             />
-                        </h2>
 
+                        <span className="phone-separator"></span>
                         <label htmlFor="phone"></label>
                         <input
                             type="tel"
@@ -290,6 +308,8 @@ function ProductListDashboard() {
                             onKeyDown={handlePhoneInputKeyDown}
                             required
                         />
+                        </h2>
+
 
                         <div className="chosen-products-container">
                             <div className="chosen-products-wrapper">
@@ -313,6 +333,7 @@ function ProductListDashboard() {
                                 container={activeContainer}
                                 setStep1Total={setStep1Total}
                                 setStep2Total={setStep2Total}
+                                setStep3Total={setStep3Total}
                                 products={products.filter((product) => product.container === activeContainer.id)}
                             />
                         )}
